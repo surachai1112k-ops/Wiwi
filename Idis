@@ -1,0 +1,540 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+
+local localPlayer = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
+
+-- States
+local systemEnabled = false
+local showPlayersTag = true
+local showRedHighlight = true
+local aimPercent = 15 -- ค่าความหนืด 1 - 100
+local currentUISize = "Medium" -- "Small", "Medium", "Large"
+local lockedTargetPlayer = nil -- ผู้เล่นที่ถูกติ๊กเลือกให้ล็อก
+
+-- Kill Aura States
+local killAuraEnabled = false
+local killAuraRange = 10 -- ระยะ Kill Aura (10 - 200 Studs)
+
+-- UI Setup
+local gui = Instance.new("ScreenGui", localPlayer:WaitForChild("PlayerGui"))
+gui.Name = "YufewUi"
+gui.ResetOnSpawn = false
+
+-- Main Toggle Button (Yufew - ปรับให้ลากย้ายได้ด้วย)
+local mainBtn = Instance.new("TextButton", gui)
+mainBtn.Size = UDim2.new(0, 100, 0, 35)
+mainBtn.Position = UDim2.new(1, -110, 0, 20)
+mainBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+mainBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+mainBtn.Text = "⚡ Yufew Menu"
+mainBtn.Font = Enum.Font.GothamBold
+mainBtn.TextSize = 11
+Instance.new("UICorner", mainBtn).CornerRadius = UDim.new(0, 8)
+
+local btnStroke = Instance.new("UIStroke", mainBtn)
+btnStroke.Color = Color3.fromRGB(80, 80, 80)
+btnStroke.Thickness = 1.5
+
+-- Main Panel Frame (ขยายขนาดรองรับ 5 แท็บ)
+local panel = Instance.new("Frame", gui)
+panel.Size = UDim2.new(0, 250, 0, 210)
+panel.Position = UDim2.new(1, -260, 0, 60)
+panel.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+panel.Visible = false
+panel.ClipsDescendants = true
+Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 8)
+
+local panelStroke = Instance.new("UIStroke", panel)
+panelStroke.Color = Color3.fromRGB(50, 50, 50)
+panelStroke.Thickness = 1.5
+
+-- Top Title Bar
+local titleBar = Instance.new("TextLabel", panel)
+titleBar.Size = UDim2.new(1, -35, 0, 25)
+titleBar.Position = UDim2.new(0, 8, 0, 2)
+titleBar.BackgroundTransparency = 1
+titleBar.TextColor3 = Color3.fromRGB(150, 150, 150)
+titleBar.TextSize = 11
+titleBar.Font = Enum.Font.GothamBold
+titleBar.TextXAlignment = Enum.TextXAlignment.Left
+titleBar.Text = "💻 — YUFEW PANEL —"
+
+-- Close Button (X)
+local closeBtn = Instance.new("TextButton", panel)
+closeBtn.Size = UDim2.new(0, 22, 0, 22)
+closeBtn.Position = UDim2.new(1, -26, 0, 3)
+closeBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.Text = "X"
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 11
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 4)
+
+closeBtn.MouseButton1Click:Connect(function()
+	panel.Visible = false
+end)
+
+-- Tab Selector Buttons (เพิ่มเป็น 5 Tabs)
+local tab1Btn = Instance.new("TextButton", panel)
+tab1Btn.Size = UDim2.new(0.2, -3, 0, 26)
+tab1Btn.Position = UDim2.new(0, 2, 0, 28)
+tab1Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+tab1Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+tab1Btn.Text = "🎨 Vis"
+tab1Btn.Font = Enum.Font.GothamBold
+tab1Btn.TextSize = 8
+Instance.new("UICorner", tab1Btn).CornerRadius = UDim.new(0, 4)
+
+local tab2Btn = Instance.new("TextButton", panel)
+tab2Btn.Size = UDim2.new(0.2, -3, 0, 26)
+tab2Btn.Position = UDim2.new(0.2, 1, 0, 28)
+tab2Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+tab2Btn.TextColor3 = Color3.fromRGB(150, 150, 150)
+tab2Btn.Text = "🎯 Aim"
+tab2Btn.Font = Enum.Font.GothamBold
+tab2Btn.TextSize = 8
+Instance.new("UICorner", tab2Btn).CornerRadius = UDim.new(0, 4)
+
+local tab3Btn = Instance.new("TextButton", panel)
+tab3Btn.Size = UDim2.new(0.2, -3, 0, 26)
+tab3Btn.Position = UDim2.new(0.4, 1, 0, 28)
+tab3Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+tab3Btn.TextColor3 = Color3.fromRGB(150, 150, 150)
+tab3Btn.Text = "👥 Target"
+tab3Btn.Font = Enum.Font.GothamBold
+tab3Btn.TextSize = 7
+Instance.new("UICorner", tab3Btn).CornerRadius = UDim.new(0, 4)
+
+local tab4Btn = Instance.new("TextButton", panel)
+tab4Btn.Size = UDim2.new(0.2, -3, 0, 26)
+tab4Btn.Position = UDim2.new(0.6, 1, 0, 28)
+tab4Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+tab4Btn.TextColor3 = Color3.fromRGB(150, 150, 150)
+tab4Btn.Text = "🚀 TP"
+tab4Btn.Font = Enum.Font.GothamBold
+tab4Btn.TextSize = 8
+Instance.new("UICorner", tab4Btn).CornerRadius = UDim.new(0, 4)
+
+local tab5Btn = Instance.new("TextButton", panel)
+tab5Btn.Size = UDim2.new(0.2, -3, 0, 26)
+tab5Btn.Position = UDim2.new(0.8, 1, 0, 28)
+tab5Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+tab5Btn.TextColor3 = Color3.fromRGB(150, 150, 150)
+tab5Btn.Text = "⚔️ Aura"
+tab5Btn.Font = Enum.Font.GothamBold
+tab5Btn.TextSize = 8
+Instance.new("UICorner", tab5Btn).CornerRadius = UDim.new(0, 4)
+
+-- Size Button
+local btnUISize = Instance.new("TextButton", panel)
+btnUISize.Size = UDim2.new(0, 45, 0, 22)
+btnUISize.Position = UDim2.new(1, -52, 1, -26)
+btnUISize.BackgroundColor3 = Color3.fromRGB(100, 50, 150)
+btnUISize.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnUISize.Text = "📏 Med"
+btnUISize.Font = Enum.Font.GothamBold
+btnUISize.TextSize = 9
+Instance.new("UICorner", btnUISize).CornerRadius = UDim.new(0, 4)
+
+-- Tab Frames (เพิ่ม tab5Frame)
+local tab1Frame = Instance.new("ScrollingFrame", panel)
+tab1Frame.Size = UDim2.new(1, 0, 1, -85)
+tab1Frame.Position = UDim2.new(0, 0, 0, 58)
+tab1Frame.BackgroundTransparency = 1
+tab1Frame.Visible = true
+tab1Frame.CanvasSize = UDim2.new(0, 0, 0, 0)
+tab1Frame.ScrollBarThickness = 3
+
+local tab2Frame = Instance.new("ScrollingFrame", panel)
+tab2Frame.Size = UDim2.new(1, 0, 1, -85)
+tab2Frame.Position = UDim2.new(0, 0, 0, 58)
+tab2Frame.BackgroundTransparency = 1
+tab2Frame.Visible = false
+tab2Frame.CanvasSize = UDim2.new(0, 0, 0, 0)
+tab2Frame.ScrollBarThickness = 3
+
+local tab3Frame = Instance.new("ScrollingFrame", panel)
+tab3Frame.Size = UDim2.new(1, 0, 1, -85)
+tab3Frame.Position = UDim2.new(0, 0, 0, 58)
+tab3Frame.BackgroundTransparency = 1
+tab3Frame.Visible = false
+tab3Frame.CanvasSize = UDim2.new(0, 0, 0, 0)
+tab3Frame.ScrollBarThickness = 3
+
+local tab4Frame = Instance.new("ScrollingFrame", panel)
+tab4Frame.Size = UDim2.new(1, 0, 1, -85)
+tab4Frame.Position = UDim2.new(0, 0, 0, 58)
+tab4Frame.BackgroundTransparency = 1
+tab4Frame.Visible = false
+tab4Frame.CanvasSize = UDim2.new(0, 0, 0, 0)
+tab4Frame.ScrollBarThickness = 3
+
+local tab5Frame = Instance.new("ScrollingFrame", panel)
+tab5Frame.Size = UDim2.new(1, 0, 1, -85)
+tab5Frame.Position = UDim2.new(0, 0, 0, 58)
+tab5Frame.BackgroundTransparency = 1
+tab5Frame.Visible = false
+tab5Frame.CanvasSize = UDim2.new(0, 0, 0, 0)
+tab5Frame.ScrollBarThickness = 3
+
+-- Switch Tabs Logic (เพิ่ม tab 5)
+local function switchTab(selectedTab)
+	tab1Frame.Visible = (selectedTab == 1)
+	tab2Frame.Visible = (selectedTab == 2)
+	tab3Frame.Visible = (selectedTab == 3)
+	tab4Frame.Visible = (selectedTab == 4)
+	tab5Frame.Visible = (selectedTab == 5)
+
+	tab1Btn.BackgroundColor3 = (selectedTab == 1) and Color3.fromRGB(50, 50, 50) or Color3.fromRGB(30, 30, 30)
+	tab1Btn.TextColor3 = (selectedTab == 1) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(150, 150, 150)
+
+	tab2Btn.BackgroundColor3 = (selectedTab == 2) and Color3.fromRGB(50, 50, 50) or Color3.fromRGB(30, 30, 30)
+	tab2Btn.TextColor3 = (selectedTab == 2) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(150, 150, 150)
+
+	tab3Btn.BackgroundColor3 = (selectedTab == 3) and Color3.fromRGB(50, 50, 50) or Color3.fromRGB(30, 30, 30)
+	tab3Btn.TextColor3 = (selectedTab == 3) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(150, 150, 150)
+
+	tab4Btn.BackgroundColor3 = (selectedTab == 4) and Color3.fromRGB(50, 50, 50) or Color3.fromRGB(30, 30, 30)
+	tab4Btn.TextColor3 = (selectedTab == 4) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(150, 150, 150)
+
+	tab5Btn.BackgroundColor3 = (selectedTab == 5) and Color3.fromRGB(50, 50, 50) or Color3.fromRGB(30, 30, 30)
+	tab5Btn.TextColor3 = (selectedTab == 5) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(150, 150, 150)
+end
+
+tab1Btn.MouseButton1Click:Connect(function() switchTab(1) end)
+tab2Btn.MouseButton1Click:Connect(function() switchTab(2) end)
+tab3Btn.MouseButton1Click:Connect(function() switchTab(3) end)
+tab4Btn.MouseButton1Click:Connect(function() switchTab(4) end)
+tab5Btn.MouseButton1Click:Connect(function() switchTab(5) end)
+
+-- --- TAB 1: VISUALS CONTENT ---
+local btnPlayers = Instance.new("TextButton", tab1Frame)
+btnPlayers.Size = UDim2.new(1, -16, 0, 34)
+btnPlayers.Position = UDim2.new(0, 8, 0, 5)
+btnPlayers.BackgroundColor3 = Color3.fromRGB(0, 160, 70)
+btnPlayers.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnPlayers.Text = "👤 Players Tag 💥: ON"
+btnPlayers.Font = Enum.Font.GothamBold
+btnPlayers.TextSize = 11
+Instance.new("UICorner", btnPlayers).CornerRadius = UDim.new(0, 6)
+
+local btnRed = Instance.new("TextButton", tab1Frame)
+btnRed.Size = UDim2.new(1, -16, 0, 34)
+btnRed.Position = UDim2.new(0, 8, 0, 45)
+btnRed.BackgroundColor3 = Color3.fromRGB(0, 160, 70)
+btnRed.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnRed.Text = "🔴 Red Players 🌀: ON"
+btnRed.Font = Enum.Font.GothamBold
+btnRed.TextSize = 11
+Instance.new("UICorner", btnRed).CornerRadius = UDim.new(0, 6)
+
+btnPlayers.MouseButton1Click:Connect(function()
+	showPlayersTag = not showPlayersTag
+	btnPlayers.Text = showPlayersTag and "👤 Players Tag 💥: ON" or "👤 Players Tag 💥: OFF"
+	btnPlayers.BackgroundColor3 = showPlayersTag and Color3.fromRGB(0, 160, 70) or Color3.fromRGB(180, 40, 40)
+end)
+
+btnRed.MouseButton1Click:Connect(function()
+	showRedHighlight = not showRedHighlight
+	btnRed.Text = showRedHighlight and "🔴 Red Players 🌀: ON" or "🔴 Red Players 🌀: OFF"
+	btnRed.BackgroundColor3 = showRedHighlight and Color3.fromRGB(0, 160, 70) or Color3.fromRGB(180, 40, 40)
+end)
+
+-- --- TAB 2: AIM CONTENT ---
+local btnMaster = Instance.new("TextButton", tab2Frame)
+btnMaster.Size = UDim2.new(1, -16, 0, 34)
+btnMaster.Position = UDim2.new(0, 8, 0, 5)
+btnMaster.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+btnMaster.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnMaster.Text = "🎯 Aimbot: OFF"
+btnMaster.Font = Enum.Font.GothamBold
+btnMaster.TextSize = 11
+Instance.new("UICorner", btnMaster).CornerRadius = UDim.new(0, 6)
+
+local btnPercent = Instance.new("TextButton", tab2Frame)
+btnPercent.Size = UDim2.new(1, -16, 0, 34)
+btnPercent.Position = UDim2.new(0, 8, 0, 45)
+btnPercent.BackgroundColor3 = Color3.fromRGB(40, 90, 160)
+btnPercent.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnPercent.Text = "⚙️ Aim Percent: 15%"
+btnPercent.Font = Enum.Font.GothamBold
+btnPercent.TextSize = 11
+Instance.new("UICorner", btnPercent).CornerRadius = UDim.new(0, 6)
+
+btnMaster.MouseButton1Click:Connect(function()
+	systemEnabled = not systemEnabled
+	btnMaster.Text = systemEnabled and "🎯 Aimbot: ON" or "🎯 Aimbot: OFF"
+	btnMaster.BackgroundColor3 = systemEnabled and Color3.fromRGB(0, 160, 70) or Color3.fromRGB(180, 40, 40)
+end)
+
+btnPercent.MouseButton1Click:Connect(function()
+	aimPercent = aimPercent + 10
+	if aimPercent > 100 then aimPercent = 10 end
+	btnPercent.Text = "⚙️ Aim Percent: " .. aimPercent .. "%"
+end)
+
+-- --- TAB 3: TARGET LIST (ระบบติ๊กเลือกตัวล็อก) ---
+local targetListLayout = Instance.new("UIListLayout", tab3Frame)
+targetListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+targetListLayout.Padding = UDim.new(0, 4)
+
+local function updateTargetList()
+	for _, child in ipairs(tab3Frame:GetChildren()) do
+		if child:IsA("TextButton") then child:Destroy() end
+	end
+
+	local clearBtn = Instance.new("TextButton", tab3Frame)
+	clearBtn.Size = UDim2.new(1, -16, 0, 26)
+	clearBtn.BackgroundColor3 = Color3.fromRGB(100, 30, 30)
+	clearBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	clearBtn.Text = "❌ Clear (Auto Target)"
+	clearBtn.Font = Enum.Font.GothamBold
+	clearBtn.TextSize = 10
+	Instance.new("UICorner", clearBtn).CornerRadius = UDim.new(0, 5)
+
+	clearBtn.MouseButton1Click:Connect(function()
+		lockedTargetPlayer = nil
+		updateTargetList()
+	end)
+
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= localPlayer then
+			local pBtn = Instance.new("TextButton", tab3Frame)
+			pBtn.Size = UDim2.new(1, -16, 0, 28)
+			pBtn.BackgroundColor3 = (lockedTargetPlayer == p) and Color3.fromRGB(0, 140, 60) or Color3.fromRGB(35, 35, 35)
+			pBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			
+			local statusText = (lockedTargetPlayer == p) and " [ LOCKED ]" or " [ CLICK TO LOCK ]"
+			pBtn.Text = "👤 " .. p.DisplayName .. statusText
+			pBtn.Font = Enum.Font.GothamBold
+			pBtn.TextSize = 9
+			Instance.new("UICorner", pBtn).CornerRadius = UDim.new(0, 5)
+
+			pBtn.MouseButton1Click:Connect(function()
+				if lockedTargetPlayer == p then
+					lockedTargetPlayer = nil
+				else
+					lockedTargetPlayer = p
+				end
+				updateTargetList()
+			end)
+		end
+	end
+	tab3Frame.CanvasSize = UDim2.new(0, 0, 0, (#Players:GetPlayers() * 32) + 30)
+end
+
+Players.PlayerAdded:Connect(updateTargetList)
+Players.PlayerRemoving:Connect(updateTargetList)
+updateTargetList()
+
+-- --- TAB 4: TELEPORT LIST (ระบบเทเลพอร์ตไปหาผู้เล่น) ---
+local teleportListLayout = Instance.new("UIListLayout", tab4Frame)
+teleportListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+teleportListLayout.Padding = UDim.new(0, 4)
+
+local function updateTeleportList()
+	for _, child in ipairs(tab4Frame:GetChildren()) do
+		if child:IsA("TextButton") then child:Destroy() end
+	end
+
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= localPlayer then
+			local tpBtn = Instance.new("TextButton", tab4Frame)
+			tpBtn.Size = UDim2.new(1, -16, 0, 28)
+			tpBtn.BackgroundColor3 = Color3.fromRGB(30, 80, 140)
+			tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			tpBtn.Text = "🚀 TP: " .. p.DisplayName
+			tpBtn.Font = Enum.Font.GothamBold
+			tpBtn.TextSize = 9
+			Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 5)
+
+			tpBtn.MouseButton1Click:Connect(function()
+				if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+					if localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart") then
+						local targetHRP = p.Character.HumanoidRootPart
+						local myHRP = localPlayer.Character.HumanoidRootPart
+						myHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
+					end
+				end
+			end)
+		end
+	end
+	tab4Frame.CanvasSize = UDim2.new(0, 0, 0, (#Players:GetPlayers() * 32) + 10)
+end
+
+Players.PlayerAdded:Connect(updateTeleportList)
+Players.PlayerRemoving:Connect(updateTeleportList)
+updateTeleportList()
+
+-- --- TAB 5: KILL AURA CONTENT (10 - 200 Studs) ---
+local btnKillAura = Instance.new("TextButton", tab5Frame)
+btnKillAura.Size = UDim2.new(1, -16, 0, 34)
+btnKillAura.Position = UDim2.new(0, 8, 0, 5)
+btnKillAura.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+btnKillAura.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnKillAura.Text = "⚔️ Kill Aura: OFF"
+btnKillAura.Font = Enum.Font.GothamBold
+btnKillAura.TextSize = 11
+Instance.new("UICorner", btnKillAura).CornerRadius = UDim.new(0, 6)
+
+local btnAuraRange = Instance.new("TextButton", tab5Frame)
+btnAuraRange.Size = UDim2.new(1, -16, 0, 34)
+btnAuraRange.Position = UDim2.new(0, 8, 0, 45)
+btnAuraRange.BackgroundColor3 = Color3.fromRGB(40, 90, 160)
+btnAuraRange.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnAuraRange.Text = "📏 Aura Range: 10 Studs"
+btnAuraRange.Font = Enum.Font.GothamBold
+btnAuraRange.TextSize = 11
+Instance.new("UICorner", btnAuraRange).CornerRadius = UDim.new(0, 6)
+
+btnKillAura.MouseButton1Click:Connect(function()
+	killAuraEnabled = not killAuraEnabled
+	btnKillAura.Text = killAuraEnabled and "⚔️ Kill Aura: ON" or "⚔️ Kill Aura: OFF"
+	btnKillAura.BackgroundColor3 = killAuraEnabled and Color3.fromRGB(0, 160, 70) or Color3.fromRGB(180, 40, 40)
+end)
+
+btnAuraRange.MouseButton1Click:Connect(function()
+	killAuraRange = killAuraRange + 10
+	if killAuraRange > 200 then killAuraRange = 10 end
+	btnAuraRange.Text = "📏 Aura Range: " .. killAuraRange .. " Studs"
+end)
+
+-- Resize UI Panel Logic
+btnUISize.MouseButton1Click:Connect(function()
+	if currentUISize == "Small" then
+		currentUISize = "Medium"
+		btnUISize.Text = "📏 Med"
+		panel.Size = UDim2.new(0, 250, 0, 210)
+	elseif currentUISize == "Medium" then
+		currentUISize = "Large"
+		btnUISize.Text = "📐 Large"
+		panel.Size = UDim2.new(0, 300, 0, 250)
+	else
+		currentUISize = "Small"
+		btnUISize.Text = "🔹 Small"
+		panel.Size = UDim2.new(0, 210, 0, 170)
+	end
+end)
+
+-- --- ระบบลาก UI ใหม่ ---
+local function makeDraggable(guiObject)
+	local dragging, dragStart, startPos
+
+	guiObject.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = guiObject.Position
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local delta = input.Position - dragStart
+			guiObject.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		end
+	end)
+end
+
+makeDraggable(mainBtn)
+makeDraggable(panel)
+
+-- เปิด/ปิด เมนู
+local isDraggingClick = false
+mainBtn.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		isDraggingClick = false
+	end
+end)
+
+mainBtn.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		isDraggingClick = true
+	end
+end)
+
+mainBtn.InputEnded:Connect(function(input)
+	if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not isDraggingClick then
+		panel.Visible = not panel.Visible
+	end
+end)
+
+-- --- ระบบดึงตำแหน่งเป้าหมาย ---
+local function getTarget()
+	if lockedTargetPlayer and lockedTargetPlayer.Parent then
+		local char = lockedTargetPlayer.Character
+		if char and char:FindFirstChild("Head") then
+			local hum = char:FindFirstChild("Humanoid")
+			if hum and hum.Health > 0 then
+				return lockedTargetPlayer
+			end
+		end
+	end
+
+	local target, shortest = nil, math.huge
+	if not localPlayer.Character or not localPlayer.Character:FindFirstChild("HumanoidRootPart") then return nil end
+	local myPos = localPlayer.Character.HumanoidRootPart.Position
+
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= localPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+			local hum = p.Character:FindFirstChild("Humanoid")
+			if hum and hum.Health > 0 then
+				local dist = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
+				if dist < shortest then
+					shortest = dist
+					target = p
+				end
+			end
+		end
+	end
+	return target
+end
+
+-- Main Loop (RenderStepped)
+RunService.RenderStepped:Connect(function()
+	-- แสงสีแดง & ป้ายชื่อ
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= localPlayer and p.Character then
+			local char = p.Character
+			local hum = char:FindFirstChild("Humanoid")
+			
+			local hl = char:FindFirstChild("YufewHighlight")
+			if showRedHighlight and hum and hum.Health > 0 then
+				if not hl then
+					hl = Instance.new("Highlight")
+					hl.Name = "YufewHighlight"
+					hl.Adornee = char
+					hl.FillColor = Color3.fromRGB(200, 30, 30)
+					hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+					hl.FillTransparency = 0.5
+					hl.OutlineTransparency = 0.5
+					hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+					hl.Parent = char
+				end
+			else
+				if hl then hl:Destroy() end
+			end
+
+			local head = char:FindFirstChild("Head")
+			local tag = head and head:FindFirstChild("YufewTag")
+			if showPlayersTag and head and hum and hum.Health > 0 then
+				if not tag then
+					tag = Instance.new("BillboardGui")
+					tag.Name = "YufewTag"
+					tag.Size = UDim2.new(0, 100, 0, 30)
+					tag.StudsOffset = Vector3.new(0, 2.5, 0)
+					tag.AlwaysOnTop = true
+					
+					local lbl = Instance.new("TextLabel", tag)
+					lbl.Name = "Label"
+					lbl.Size = UDim2.new(1, 0, 1, 0)
+					lbl.BackgroundTranspa
